@@ -24,14 +24,14 @@ struct ENV{
 
 io_service global_io_service;
 
-class EchoSession : public enable_shared_from_this<EchoSession> {
+class HttpSession : public enable_shared_from_this<HttpSession> {
  private:
   enum { max_length = 1024 };
   ip::tcp::socket _socket;
   array<char, max_length> _data;
 
  public:
-  EchoSession(ip::tcp::socket socket) : _socket(move(socket)) {}
+  HttpSession(ip::tcp::socket socket) : _socket(move(socket)) {}
 
   void start() { do_read(); }
 
@@ -41,66 +41,71 @@ class EchoSession : public enable_shared_from_this<EchoSession> {
     _socket.async_read_some(
         buffer(_data, max_length),
         [this, self](boost::system::error_code ec, size_t length) {
-         //if (!ec) do_write(length);
 		if(!ec){
-			string str;
-			str.append(_data.data(),_data.data()+length);
+			string req = _data.data();
+			
 			struct ENV env;
-			parse_request(str,env);
-			if(!strcmp(env.req_uri.c_str(),"/panel.cgi")){
-				cout << "panel.cgi" << endl;
-				pid = fork();
-				if(pid == 0){
-					dup2(_socket,STDOUT);
-					dup2(_socket,STDIN);
-					execl(env.req_uri.c_str(),env.req_uri.c_str(),NULL);
-				}else{
-					_socket.close();	
+			parse_request(req,env);
+			env.s_addr = _socket.local_endpoint().to_string();
+			env.s_port = to_string(_socket.local_endpoint().port());
+			env.r_addr = _socket.remote_endpoint().to_string();
+			env.r_port = to_string(_socket.remote_endpoint().port());			
+
+			global_io_service.notify_fork(io_service::fork_prepare);
+			pid_t pid = fork();
+			if(pid == 0){	
+				global_io_service.notify_fork(io_service::fork_child);
+					
+				dup2(_socket.native_handle(),STDIN_FILENO);
+				dup2(_socket.native_handle(),STDOUT_FILENO);
+				dup2(_socket.native_handle(),STDERR_FILENO);
+					
+				cout << env.server_protocol + "200 OK" << endl;
+					
+				if(execl("panel.cgi","panel.cgi",NULL)<0){
+					cout << env.server_protocol + "500 Internal Server Error" << endl;
+					_socket.close();
 				}
+
+			}else if(pid > 0){
+				global_io_service.notify_fork(io_service::fork_parent);
+				_socket.close();	
 			}
-			do_read();
 		}	
         });
   }
 
-  void do_write(size_t length) {
-    auto self(shared_from_this());
-    _socket.async_send(
-        buffer(_data, length),
-        [this, self](boost::system::error_code ec, size_t /* length */) {
-          if (!ec) do_read();
-        });
-  }
-
   void parse_request(string request,struct ENV& env){
-  	vector<string> parsed_request;
 	stringstream ss1(request);
-	string str1;
-	for(int line=0 ; line<2&&getline(ss1,str1) ; line++){
-		stringstream ss2(str1);
-		string str2;
-		getline(ss2,str2,'\r');
-		stringstream ss3(str2);
-		string str3;
+	string str;
+	for(int line=0 ; line<2&&getline(ss1,str) ; line++){
+		stringstream ss2(str);
+		getline(ss2,str,'\r');
+		stringstream ss3(str);
 		if(line==0){
 			ss3 >> env.req_method;
-			ss3 >> env.req_uri;
-			ss3 >> env.server_protocol;			
+			ss3 >> str;
+			ss3 >> env.server_protocol;	
+			stringstream ss4(str);
+			getline(ss4,str,'?');
+			env.req_uri = str.substr(1,str.size()-1);
+			getline(ss4,env.q_str,'?');		
 		}else if(line==1){
-			ss3 >> str3;
+			ss3 >> str;
 			ss3 >> env.http_host;
 		}
 	}	
   }
+
 };
 
-class EchoServer {
+class HttpServer {
  private:
   ip::tcp::acceptor _acceptor;
   ip::tcp::socket _socket;
 
  public:
-  EchoServer(short port)
+  HttpServer(short port)
       : _acceptor(global_io_service, ip::tcp::endpoint(ip::tcp::v4(), port)),
         _socket(global_io_service) {
     do_accept();
@@ -109,7 +114,7 @@ class EchoServer {
  private:
   void do_accept() {
     _acceptor.async_accept(_socket, [this](boost::system::error_code ec) {
-	if (!ec) make_shared<EchoSession>(move(_socket))->start();	
+	if (!ec) make_shared<HttpSession>(move(_socket))->start();	
       	do_accept();
     });
   }
@@ -123,7 +128,7 @@ int main(int argc, char* const argv[]) {
 
   try {
     unsigned short port = atoi(argv[1]);
-    EchoServer server(port);
+    HttpServer server(port);
     global_io_service.run();
   } catch (exception& e) {
     cerr << "Exception: " << e.what() << "\n";
