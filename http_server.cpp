@@ -46,23 +46,24 @@ class HttpSession : public enable_shared_from_this<HttpSession> {
 			
 			struct ENV env;
 			parse_request(req,env);
-			env.s_addr = _socket.local_endpoint().to_string();
-			env.s_port = to_string(_socket.local_endpoint().port());
-			env.r_addr = _socket.remote_endpoint().to_string();
-			env.r_port = to_string(_socket.remote_endpoint().port());			
+			env.server_addr = _socket.local_endpoint().address().to_string();
+			env.server_port = to_string(_socket.local_endpoint().port());
+			env.remote_addr = _socket.remote_endpoint().address().to_string();
+			env.remote_port = to_string(_socket.remote_endpoint().port());			
 
 			global_io_service.notify_fork(io_service::fork_prepare);
 			pid_t pid = fork();
 			if(pid == 0){	
 				global_io_service.notify_fork(io_service::fork_child);
-					
+				set_env(env);
+				
 				dup2(_socket.native_handle(),STDIN_FILENO);
 				dup2(_socket.native_handle(),STDOUT_FILENO);
 				dup2(_socket.native_handle(),STDERR_FILENO);
 					
 				cout << env.server_protocol + "200 OK" << endl;
 					
-				if(execl("panel.cgi","panel.cgi",NULL)<0){
+				if(execl(env.req_uri.c_str(),env.req_uri.c_str(),NULL)<0){
 					cout << env.server_protocol + "500 Internal Server Error" << endl;
 					_socket.close();
 				}
@@ -95,6 +96,19 @@ class HttpSession : public enable_shared_from_this<HttpSession> {
 			ss3 >> env.http_host;
 		}
 	}	
+  }
+
+  void set_env(struct ENV& env){
+  	clearenv();
+	setenv("REQUEST_METHOD",env.req_method.c_str(),1);
+	setenv("REQUEST_URI",env.req_uri.c_str(),1);
+	setenv("QUERY_STRING",env.q_str.c_str(),1);
+	setenv("SERVER_PROTOCOL",env.server_protocol.c_str(),1);
+	setenv("HTTP_HOST",env.http_host.c_str(),1);
+	setenv("SERVER_ADDR",env.server_addr.c_str(),1);
+	setenv("SEVRER_PORT",env.server_port.c_str(),1);
+	setenv("REMOTE_ADDR",env.remote_addr.c_str(),1);
+	setenv("REMOTE_PORT",env.remote_port.c_str(),1);
   }
 
 };
