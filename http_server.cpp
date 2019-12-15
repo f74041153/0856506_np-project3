@@ -42,7 +42,7 @@ class HttpSession : public enable_shared_from_this<HttpSession> {
         buffer(_data, max_length),
         [this, self](boost::system::error_code ec, size_t length) {
 		if(!ec){
-			string req = _data.data();
+			string req(_data.data(),length);
 			
 			struct ENV env;
 			parse_request(req,env);
@@ -60,12 +60,14 @@ class HttpSession : public enable_shared_from_this<HttpSession> {
 				dup2(_socket.native_handle(),STDIN_FILENO);
 				dup2(_socket.native_handle(),STDOUT_FILENO);
 				dup2(_socket.native_handle(),STDERR_FILENO);
-					
-				cout << env.server_protocol + "200 OK" << endl;
-					
+				_socket.close();	
+
+				string ok = env.server_protocol + "200 OK\n";
+				write(1,ok.c_str(),ok.size());	
+
 				if(execl(env.req_uri.c_str(),env.req_uri.c_str(),NULL)<0){
-					cout << env.server_protocol + "500 Internal Server Error" << endl;
-					_socket.close();
+					string err = env.server_protocol + "500 Internal Server Error\n" ;
+					write(1,err.c_str(),err.size()); 
 				}
 
 			}else if(pid > 0){
