@@ -102,6 +102,7 @@ class ConsoleSession : public enable_shared_from_this<ConsoleSession> {
 			case '<' : buffer.append("&lt;");	break;
 	   		case '>' : buffer.append("&gt;");	break;
 			case '\n': buffer.append("&NewLine;");	break;
+			case '\r': buffer.append("");		break;
 			default  : buffer.append(&data[pos],1);	break;			   
 		}
 	  }
@@ -118,8 +119,9 @@ class ConsoleSession : public enable_shared_from_this<ConsoleSession> {
   void output_command(int rsid,string content){
   	// client <- console -> RS
 	html_escape(content);
-	string rsp = "<script>document.getElementById('s"+ to_string(rsid) +"').innerHTML += \'<b>"+ content +"<b>\';</script>";
-	cout << rsp << flush;	
+	string rsp = "<script>document.getElementById('s"+ to_string(rsid) +"').innerHTML += \'"+ content +"\';</script>";
+	//cout << rsp << flush;	
+	write(1,rsp.c_str(),rsp.size());
   }
 
 };
