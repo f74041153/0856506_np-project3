@@ -118,8 +118,9 @@ private:
 	void set_env(struct ENV &env)
 	{
 		clearenv();
+		string req_uri = "/" + env.req_uri;
 		setenv("REQUEST_METHOD", env.req_method.c_str(), 1);
-		setenv("REQUEST_URI", env.req_uri.c_str(), 1);
+		setenv("REQUEST_URI", req_uri.c_str(), 1);
 		setenv("QUERY_STRING", env.q_str.c_str(), 1);
 		setenv("SERVER_PROTOCOL", env.server_protocol.c_str(), 1);
 		setenv("HTTP_HOST", env.http_host.c_str(), 1);
