@@ -36,9 +36,9 @@ struct RemoteServer
 
 io_service global_io_service;
 
-void set_remote_server(struct RemoteServer rs[])
+void set_remote_server(struct RemoteServer rs[],struct ENV env)
 {
-	string q_str = getenv("QUERY_STRING");
+	string q_str = env.q_str;
 	stringstream ss1(q_str);
 	string str;
 	for (int i = 0; i < MAXHOST; i++)
@@ -97,7 +97,7 @@ private:
 					env.server_port = to_string(_socket.local_endpoint().port());
 					env.remote_addr = _socket.remote_endpoint().address().to_string();
 					env.remote_port = to_string(_socket.remote_endpoint().port());
-					set_env(env);
+					//set_env(env);
 
 					response();
 				}
@@ -118,7 +118,7 @@ private:
 					}
 					else if (!strcmp(env.req_uri.c_str(), "console.cgi"))
 					{
-						set_remote_server(RS);
+						set_remote_server(RS,env);
 						console_cgi(RS);
 					}
 				}
@@ -150,20 +150,6 @@ private:
 				ss3 >> env.http_host;
 			}
 		}
-	}
-
-	void set_env(struct ENV &env)
-	{
-		clearenv();
-		setenv("REQUEST_METHOD", env.req_method.c_str(), 1);
-		setenv("REQUEST_URI", env.req_uri.c_str(), 1);
-		setenv("QUERY_STRING", env.q_str.c_str(), 1);
-		setenv("SERVER_PROTOCOL", env.server_protocol.c_str(), 1);
-		setenv("HTTP_HOST", env.http_host.c_str(), 1);
-		setenv("SERVER_ADDR", env.server_addr.c_str(), 1);
-		setenv("SEVRER_PORT", env.server_port.c_str(), 1);
-		setenv("REMOTE_ADDR", env.remote_addr.c_str(), 1);
-		setenv("REMOTE_PORT", env.remote_port.c_str(), 1);
 	}
 
 	void panel_cgi()
